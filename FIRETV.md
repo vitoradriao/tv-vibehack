@@ -55,6 +55,32 @@ What is left: after Home, the launcher snapshot is not interactive for about fiv
  Amazon's launcher stays in RAM (77–130 MB PSS measured), because
 Fire OS will not let it be killed.
 
+## Fire OS 8
+
+Tested on a Fire TV Stick 4K Max (AFTKRT), Fire OS 8.1.8.5 (Android 11, API 30). The Fire OS 6 build did not work:
+
+- **Crash on start.** `startForeground()` threw `SecurityException: ... requires android.permission.FOREGROUND_SERVICE`
+  (needed since Android 9). `HomeWatchService` died in `onCreate`, taking `MainActivity` with it, which is the
+  spinner-then-gone the first attempt saw. Fixed by declaring `FOREGROUND_SERVICE`; the notification now also has a
+  channel (Android 8+ rejects foreground notifications without one), and the service is started with
+  `startForegroundService()` on API 26+ so the boot receiver's start is not refused as a background start.
+- **Home never seen.** `READ_LOGS` granted over adb still works on Android 11: the app's logcat sees the system and
+  events buffers. But Android 10+ logs activity starts as `ActivityTaskManager` (not `ActivityManager`) and the event
+  tags are `wm_resume_activity` / `wm_pause_activity` (not `am_*`). The watcher now follows both sets. A Home press
+  shows `from uid 0` here, so leaving Amazon's Settings row accepts uid 0 as well as 1000.
+- Nothing else needed: `TYPE_APPLICATION_OVERLAY` with the `SYSTEM_ALERT_WINDOW` app-op works, and no
+  `foregroundServiceType` is required at targetSdk 29. Amazon's launcher stays protected (not touched).
+
+| Case (Fire OS 8) | Result |
+|---|---|
+| Install + grants + `am start` | Launcher draws, `HomeWatchService` foreground, no crash |
+| `input keyevent HOME` on the launcher | Cover up 26 ms, bounce 66 ms; launcher focused at 7 s |
+| Home inside Netflix | Cover up 38 ms, bounce 103 ms; launcher focused |
+| Open a tile (Alexa Smart Home), then Back | Back returns to the launcher |
+| Reboot | Amazon home shows briefly, then the launcher comes up on its own (~40 s after `adb reboot`); Home works after |
+
+Not tested on Fire OS 8: Settings menu / "All settings" row, hardware remote key, screensaver.
+
 ## Install
 
 ```bash
